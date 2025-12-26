@@ -2,79 +2,81 @@ import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { DeployFunction } from "hardhat-deploy/types";
 import { Contract } from "ethers";
 
-/**
- * Deploys a contract named "YourContract" using the deployer account and
- * constructor arguments set to the deployer address
- *
- * @param hre HardhatRuntimeEnvironment object.
- */
 const deployContracts: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
-  /*
-    On localhost, the deployer account is the one that comes with Hardhat, which is already funded.
-
-    When deploying to live networks (e.g `yarn deploy --network sepolia`), the deployer account
-    should have sufficient balance to pay for the gas fees for contract creation.
-
-    You can generate a random account with `yarn generate` or `yarn account:import` to import your
-    existing PK which will fill DEPLOYER_PRIVATE_KEY_ENCRYPTED in the .env file (then used on hardhat.config.ts)
-    You can run the `yarn account` command to check your balance in every network.
-  */
   const { deployer } = await hre.getNamedAccounts();
   const { deploy } = hre.deployments;
 
   await deploy("Corn", {
     from: deployer,
-    // Contract constructor arguments
     args: [],
     log: true,
-    // autoMine: can be passed to the deploy function to make the deployment process faster on local networks by
-    // automatically mining the contract deployment transaction. There is no effect on live networks.
     autoMine: true,
   });
   const cornToken = await hre.ethers.getContract<Contract>("Corn", deployer);
 
   await deploy("CornDEX", {
     from: deployer,
-    args: [cornToken.target],
+    args: [await cornToken.getAddress()],
     log: true,
     autoMine: true,
   });
   const cornDEX = await hre.ethers.getContract<Contract>("CornDEX", deployer);
-  const lending = await deploy("Lending", {
+
+  const lendingDeploy = await deploy("Lending", {
     from: deployer,
-    args: [cornDEX.target, cornToken.target],
+    args: [await cornDEX.getAddress(), await cornToken.getAddress()],
     log: true,
     autoMine: true,
   });
+  const lending = await hre.ethers.getContract<Contract>("Lending", deployer);
 
-  // Set up the move price contract
   const movePrice = await deploy("MovePrice", {
     from: deployer,
-    args: [cornDEX.target, cornToken.target],
+    args: [await cornDEX.getAddress(), await cornToken.getAddress()],
     log: true,
     autoMine: true,
   });
 
-  // Only set up contract state on local network
-  if (hre.network.name == "localhost") {
-    // Give ETH and CORN to the move price contract
+  if (hre.network.name === "localhost") {
+    console.log("Configuring for Localhost...");
+    
     await hre.ethers.provider.send("hardhat_setBalance", [
       movePrice.address,
-      `0x${hre.ethers.parseEther("10000000000000000000000").toString(16)}`,
+      `0x${hre.ethers.parseEther("10000").toString(16)}`,
     ]);
-    await cornToken.mintTo(movePrice.address, hre.ethers.parseEther("10000000000000000000000"));
-    // Lenders deposit CORN to the lending contract
-    await cornToken.mintTo(lending.address, hre.ethers.parseEther("10000000000000000000000"));
-    // Give CORN and ETH to the deployer
-    await cornToken.mintTo(deployer, hre.ethers.parseEther("1000000000000"));
-    await hre.ethers.provider.send("hardhat_setBalance", [
-      deployer,
-      `0x${hre.ethers.parseEther("100000000000").toString(16)}`,
-    ]);
+    await cornToken.mintTo(movePrice.address, hre.ethers.parseEther("10000"));
 
-    await cornToken.approve(cornDEX.target, hre.ethers.parseEther("1000000000"));
-    await cornDEX.init(hre.ethers.parseEther("1000000000"), { value: hre.ethers.parseEther("1000000") });
+    await cornToken.mintTo(await lending.getAddress(), hre.ethers.parseEther("10000"));
+
+    await cornToken.mintTo(deployer, hre.ethers.parseEther("10000"));
+    
+    await cornToken.approve(await cornDEX.getAddress(), hre.ethers.parseEther("1000"));
+    await cornDEX.init(hre.ethers.parseEther("1000"), { value: hre.ethers.parseEther("1") }); // Ratio 1 ETH : 1000 CORN
+  } 
+  
+  else {
+    console.log("Configuring for Public Network (Sepolia)...");
+    
+    // 1. Fund Lending Contract (So users can borrow)
+    // We transfer 100 CORN from deployer to Lending contract
+    console.log("Funding Lending Contract...");
+    try {
+        await cornToken.transfer(await lending.getAddress(), hre.ethers.parseEther("100"));
+    } catch (e) {
+        console.log("Could not fund Lending contract (Check deployer balance)");
+    }
+
+    // 2. Initialize DEX (Set Price)
+    console.log("Initializing DEX Liquidity...");
+    try {
+        await cornToken.approve(await cornDEX.getAddress(), hre.ethers.parseEther("10"));
+        // Init with: 0.01 ETH and 10 CORN => Price: 1 ETH = 1000 CORN
+        await cornDEX.init(hre.ethers.parseEther("10"), { value: hre.ethers.parseEther("0.01") });
+    } catch (e) {
+         console.log("DEX might already be initialized or insufficient funds");
+    }
   }
 };
 
 export default deployContracts;
+deployContracts.tags = ["Lending"];
