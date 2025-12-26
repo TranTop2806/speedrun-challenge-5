@@ -179,37 +179,43 @@ contract Lending is Ownable {
      * @dev The caller must have approved this contract to transfer the debt
      */
     function liquidate(address user) public {
+        // 1. Kiểm tra vị thế có thực sự bị thanh lý được không
         if (!isLiquidatable(user)) {
             revert Lending__NotLiquidatable();
         }
 
         uint256 debtToCover = s_userBorrowed[user];
+
+        // --- ĐÂY LÀ PHẦN QUAN TRỌNG ĐỂ PASS TEST ---
+        // Kiểm tra số dư CORN của người thanh lý (liquidator) trước
+        if (i_corn.balanceOf(msg.sender) < debtToCover) {
+            revert Lending__InsufficientLiquidatorCorn();
+        }
+        // ------------------------------------------
+
         uint256 price = getPrice();
         
-        // 1. Burn the debt from the user record
+        // Xóa nợ cho người vay
         s_userBorrowed[user] = 0;
 
-        // 2. Calculate ETH collateral to seize
-        // Debt in ETH = (Debt * 1e18) / Price
+        // Tính toán lượng ETH để thu hồi (Nợ + 10% thưởng)
         uint256 debtInEth = (debtToCover * 1e18) / price;
-        // Add reward (10%)
         uint256 reward = (debtInEth * LIQUIDATOR_REWARD) / 100;
         uint256 totalCollateralToSeize = debtInEth + reward;
 
-        // Cap at user's available collateral
+        // Đảm bảo không lấy vượt quá số dư của user
         if (totalCollateralToSeize > s_userCollateral[user]) {
             totalCollateralToSeize = s_userCollateral[user];
         }
 
-        // 3. Take Corn from Liquidator
+        // Thu hồi CORN từ người thanh lý
         bool successCorn = i_corn.transferFrom(msg.sender, address(this), debtToCover);
         if (!successCorn) {
             revert Lending__InsufficientLiquidatorCorn();
         }
 
-        // 4. Reduce user collateral and send to Liquidator
+        // Trả ETH thưởng cho người thanh lý
         s_userCollateral[user] -= totalCollateralToSeize;
-        
         (bool successEth, ) = payable(msg.sender).call{value: totalCollateralToSeize}("");
         if (!successEth) {
             revert Lending__TransferFailed();

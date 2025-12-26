@@ -3,10 +3,10 @@
 This project is a solution for Challenge 5 of SpeedRunEthereum. It implements a decentralized lending protocol where users can borrow **$CORN** tokens by depositing **ETH** as collateral. The system ensures solvency through over-collateralization and a liquidation mechanism.
 
 ## 🔗 Links
-- **Live Demo:** https://nextjs-70q6em9ev-tranvananhthu280604-gmailcoms-projects.vercel.ap
-- **Lending Contract (Sepolia):** https://sepolia.etherscan.io/address/0x967786DACAcFDb9eB9d75DCB5B16AC7FFa5bBeeE#code
-- **Corn Token (Sepolia):** https://sepolia.etherscan.io/address/0xBcaBf57BF78A205c26EB9d53CEEF605Cf985Ee80#code
-
+- **Live Demo:** https://nextjs-70q6em9ev-tranvananhthu280604-gmailcoms-projects.vercel.app
+- **Lending Contract (Sepolia):** https://sepolia.etherscan.io/address/0x193772a00a24e9d16dDBBBbA27BdB86D2C50B96d#code
+- **Corn Token (Sepolia):** https://sepolia.etherscan.io/address/0x1C754A63003B9aA947afb1E2619E0410f5422467#code
+- **CornDEX (Sepolia):** https://sepolia.etherscan.io/address/0x60B838165b651b3B52E49b36CaEE0DD181d14d8C#code
 ## 🛠 Project Mechanics
 
 ### 1. Collateral & Borrowing
